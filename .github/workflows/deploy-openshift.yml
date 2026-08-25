@@ -1,0 +1,102 @@
+name: Build and deploy to OpenShift
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: security-app-openshift
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: dev
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set image names
+        shell: bash
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "BACKEND_IMAGE=ghcr.io/$owner/security-api:${GITHUB_SHA}" >> "$GITHUB_ENV"
+          echo "FRONTEND_IMAGE=ghcr.io/$owner/security-ui:${GITHUB_SHA}" >> "$GITHUB_ENV"
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: ${{ env.BACKEND_IMAGE }}
+
+      - name: Build and push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: ${{ env.FRONTEND_IMAGE }}
+
+      - name: Install OpenShift CLI
+        uses: redhat-actions/openshift-tools-installer@v1
+        with:
+          oc: latest
+
+      - name: Log in to OpenShift
+        run: |
+          oc login "${{ secrets.OPENSHIFT_SERVER }}" \
+            --token="${{ secrets.OPENSHIFT_TOKEN }}" \
+            --insecure-skip-tls-verify=true
+          oc project "${{ secrets.OPENSHIFT_NAMESPACE }}"
+
+      - name: Configure image pull secret
+        run: |
+          oc create secret docker-registry ghcr-pull-secret \
+            --docker-server=ghcr.io \
+            --docker-username="${{ secrets.GHCR_USERNAME }}" \
+            --docker-password="${{ secrets.GHCR_PULL_TOKEN }}" \
+            --dry-run=client -o yaml | oc apply -f -
+          oc secrets link default ghcr-pull-secret --for=pull
+
+      - name: Configure backend secrets
+        run: |
+          oc create secret generic security-api-secrets \
+            --from-literal=DB_URL="${{ secrets.DB_URL }}" \
+            --from-literal=DB_USERNAME="${{ secrets.DB_USERNAME }}" \
+            --from-literal=DB_PASSWORD="${{ secrets.DB_PASSWORD }}" \
+            --from-literal=JWT_SECRET="${{ secrets.JWT_SECRET }}" \
+            --dry-run=client -o yaml | oc apply -f -
+
+      - name: Apply OpenShift resources
+        run: oc apply -f openshift/
+
+      - name: Deploy immutable images
+        run: |
+          oc set image deployment/security-api backend="$BACKEND_IMAGE"
+          oc set image deployment/security-ui frontend="$FRONTEND_IMAGE"
+          oc rollout status deployment/security-api --timeout=5m
+          oc rollout status deployment/security-ui --timeout=5m
+
+      - name: Show application URL
+        run: |
+          route="https://$(oc get route security-ui -o jsonpath='{.spec.host}')"
+          echo "Application URL: $route"
+          echo "### OpenShift deployment" >> "$GITHUB_STEP_SUMMARY"
+          echo "Application: $route" >> "$GITHUB_STEP_SUMMARY"
+

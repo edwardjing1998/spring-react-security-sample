@@ -1,0 +1,28 @@
+spring:
+  application:
+    name: security-api
+  profiles:
+    default: dev
+  datasource:
+    url: jdbc:h2:file:./data/securitydb;AUTO_SERVER=TRUE
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  h2:
+    console:
+      enabled: false
+
+server:
+  port: ${PORT:4444}
+
+app:
+  jwt:
+    # Base64 for a development-only 32-byte key. Override JWT_SECRET outside local development.
+    secret: ${JWT_SECRET:c3ByaW5nLXJlYWN0LXNlY3VyaXR5LWRldi1rZXktMzItYnl0ZXMhIQ==}
+    expiration-seconds: ${JWT_EXPIRATION_SECONDS:900}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5174}
+
