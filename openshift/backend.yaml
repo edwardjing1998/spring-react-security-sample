@@ -1,67 +1,116 @@
 apiVersion: apps/v1
 kind: Deployment
+
 metadata:
   name: security-api
   labels:
     app: security-api
+
 spec:
   replicas: 1
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+
   selector:
     matchLabels:
       app: security-api
+
   template:
     metadata:
       labels:
         app: security-api
+
     spec:
       containers:
         - name: backend
+
+          # GitHub Actions replaces this placeholder with the immutable
+          # ghcr.io image and commit SHA.
           image: security-api:latest
           imagePullPolicy: Always
+
           ports:
             - name: http
               containerPort: 8080
+              protocol: TCP
+
           env:
             - name: SPRING_PROFILES_ACTIVE
               value: postgres
+
+            # The separate Liquibase repository owns schema changes.
             - name: SPRING_JPA_HIBERNATE_DDL_AUTO
               value: validate
+
+            # Force Spring Boot to use the same port as the Service
+            # and OpenShift probes.
+            - name: SERVER_PORT
+              value: "8080"
+
           envFrom:
             - secretRef:
                 name: security-api-secrets
+
+          # Liveness and readiness probes are disabled until this
+          # startup probe succeeds.
+          startupProbe:
+            httpGet:
+              path: /api/health
+              port: http
+              scheme: HTTP
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 30
+            successThreshold: 1
+
           readinessProbe:
             httpGet:
               path: /api/health
               port: http
-            initialDelaySeconds: 15
+              scheme: HTTP
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 6
+            successThreshold: 1
+
           livenessProbe:
             httpGet:
               path: /api/health
               port: http
-            initialDelaySeconds: 45
+              scheme: HTTP
             periodSeconds: 20
             timeoutSeconds: 3
             failureThreshold: 3
+            successThreshold: 1
+
           resources:
             requests:
               cpu: 100m
               memory: 256Mi
+
             limits:
               cpu: 500m
               memory: 768Mi
+
 ---
 apiVersion: v1
 kind: Service
+
 metadata:
   name: security-api
+  labels:
+    app: security-api
+
 spec:
   selector:
     app: security-api
+
   ports:
     - name: http
       port: 8080
       targetPort: http
-
+      protocol: TCP
