@@ -30,6 +30,3 @@ app:
     # OpenShift overrides this with the JWT_SECRET secret.
     secret: ${JWT_SECRET:c3ByaW5nLXJlYWN0LXNlY3VyaXR5LWRldi1rZXktMzItYnl0ZXMhIQ==}
     expiration-seconds: ${JWT_EXPIRATION_SECONDS:900}
-
-  cors:
-    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
