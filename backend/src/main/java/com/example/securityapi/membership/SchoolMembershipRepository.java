@@ -1,6 +1,7 @@
 package com.example.securityapi.membership;
 
 import java.time.LocalDate;
+import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -8,6 +9,16 @@ public interface SchoolMembershipRepository
         extends JpaRepository<SchoolMembership, Long> {
 
     boolean existsBySchoolId(Long schoolId);
+
+    boolean existsByUserIdAndMembershipType(
+            Long userId,
+            MembershipType membershipType
+    );
+
+    List<SchoolMembership>
+    findByMembershipTypeOrderByUserId(
+            MembershipType membershipType
+    );
 
     boolean existsByUserIdAndSchoolIdAndMembershipTypeAndStartDate(
             Long userId,
