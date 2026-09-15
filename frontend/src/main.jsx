@@ -143,6 +143,8 @@ function Dashboard({ user, onLogout }) {
       {user.role === 'ADMIN' && <ProfileAdmin />}
       {user.role === 'ADMIN' && <SchoolAdmin />}
       {user.role === 'ADMIN' && <MembershipAdmin />}
+      {['ADMIN', 'STUDENT', 'STAFF', 'GUARDIAN', 'TEACHER'].includes(user.role) &&
+        <StudentProfileManager />}
     </div>
   )
 }
@@ -719,6 +721,241 @@ function MembershipAdmin() {
               </div>
             </article>
           ))}
+      </div>
+    </section>
+  )
+}
+
+const emptyStudentProfile = {
+  userId: '',
+  studentNumber: '',
+  dateOfBirth: '',
+  expectedGraduationYear: '',
+}
+
+function StudentProfileManager() {
+  const [profiles, setProfiles] = useState([])
+  const [students, setStudents] = useState([])
+  const [form, setForm] = useState(emptyStudentProfile)
+  const [editingUserId, setEditingUserId] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+
+  async function load() {
+    setLoading(true)
+    setError('')
+    try {
+      const [profileRows, studentRows] = await Promise.all([
+        api('/api/student-profiles'),
+        api('/api/student-profile-users'),
+      ])
+      setProfiles(profileRows)
+      setStudents(studentRows)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { load() }, [])
+
+  function change(name, value) {
+    setForm(current => ({ ...current, [name]: value }))
+  }
+
+  function resetForm() {
+    setEditingUserId(null)
+    setForm(emptyStudentProfile)
+    setError('')
+  }
+
+  function edit(profile) {
+    setEditingUserId(profile.userId)
+    setForm({
+      userId: String(profile.userId),
+      studentNumber: profile.studentNumber || '',
+      dateOfBirth: profile.dateOfBirth || '',
+      expectedGraduationYear: profile.expectedGraduationYear
+        ? String(profile.expectedGraduationYear)
+        : '',
+    })
+    setError('')
+    setMessage('')
+  }
+
+  async function save(event) {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    setMessage('')
+
+    const details = {
+      studentNumber: form.studentNumber || null,
+      dateOfBirth: form.dateOfBirth || null,
+      expectedGraduationYear: form.expectedGraduationYear
+        ? Number(form.expectedGraduationYear)
+        : null,
+    }
+
+    try {
+      if (editingUserId !== null) {
+        await api(`/api/student-profiles/${editingUserId}`, {
+          method: 'PUT',
+          body: JSON.stringify(details),
+        })
+        setMessage('Student profile updated.')
+      } else {
+        await api('/api/student-profiles', {
+          method: 'POST',
+          body: JSON.stringify({
+            ...details,
+            userId: Number(form.userId),
+          }),
+        })
+        setMessage('Student profile created.')
+      }
+
+      resetForm()
+      await load()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function remove(profile) {
+    if (!window.confirm(`Delete the student profile for ${profile.userName}?`)) return
+
+    setBusy(true)
+    setError('')
+    setMessage('')
+    try {
+      await api(`/api/student-profiles/${profile.userId}`, {
+        method: 'DELETE',
+      })
+      if (editingUserId === profile.userId) resetForm()
+      setMessage('Student profile deleted.')
+      await load()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const profiledUserIds = new Set(
+    profiles.map(profile => profile.userId)
+  )
+  const availableStudents = students.filter(
+    student => !profiledUserIds.has(student.id)
+  )
+
+  return (
+    <section className="profile-admin student-profile-admin">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">AUTHORIZED SCHOOL ROLES</p>
+          <h3>Student profile management</h3>
+          <p>Create, update, and delete student education records.</p>
+        </div>
+        {editingUserId !== null &&
+          <button className="ghost" onClick={resetForm}>Cancel edit</button>}
+      </div>
+
+      <form className="profile-form student-profile-form" onSubmit={save}>
+        <label className="field full-width">
+          <span>Student account</span>
+          <select
+            required
+            disabled={editingUserId !== null}
+            value={form.userId}
+            onChange={event => change('userId', event.target.value)}
+          >
+            <option value="">Select a student</option>
+            {editingUserId !== null
+              ? students.filter(student => student.id === editingUserId)
+                  .map(student =>
+                    <option key={student.id} value={student.id}>
+                      {student.name} — {student.email}
+                    </option>)
+              : availableStudents.map(student =>
+                  <option key={student.id} value={student.id}>
+                    {student.name} — {student.email}
+                  </option>)}
+          </select>
+        </label>
+        <Field
+          label="Student number"
+          type="text"
+          value={form.studentNumber}
+          required={false}
+          onChange={value => change('studentNumber', value)}
+        />
+        <Field
+          label="Date of birth"
+          type="date"
+          value={form.dateOfBirth}
+          required={false}
+          onChange={value => change('dateOfBirth', value)}
+        />
+        <Field
+          label="Expected graduation year"
+          type="number"
+          min="1900"
+          max="2200"
+          value={form.expectedGraduationYear}
+          required={false}
+          onChange={value => change('expectedGraduationYear', value)}
+        />
+        <button
+          className="primary full-width"
+          disabled={busy || (editingUserId === null && !availableStudents.length)}
+        >
+          {busy ? 'Saving…'
+            : editingUserId !== null
+              ? 'Update student profile'
+              : 'Create student profile'}
+        </button>
+      </form>
+
+      {message && <div className="success profile-message">{message}</div>}
+      {error && <div className="error profile-message">{error}</div>}
+
+      <div className="profile-list">
+        <div className="list-heading">
+          <h3>Student profiles</h3>
+          <button className="ghost" onClick={load}>Refresh</button>
+        </div>
+        {loading
+          ? <div className="spinner small" aria-label="Loading student profiles" />
+          : profiles.length === 0
+            ? <p className="empty-state">No student profiles have been created.</p>
+            : profiles.map(profile => (
+                <article className="profile-row student-profile-row" key={profile.userId}>
+                  <div className="student-mark">
+                    {profile.userName.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="profile-summary">
+                    <strong>{profile.userName}</strong>
+                    <span>{profile.userEmail}</span>
+                    <small>
+                      {profile.studentNumber || 'No student number'}
+                      {profile.expectedGraduationYear
+                        ? ` · Graduation ${profile.expectedGraduationYear}`
+                        : ''}
+                    </small>
+                  </div>
+                  <div className="row-actions">
+                    <button className="ghost" onClick={() => edit(profile)}>Edit</button>
+                    <button className="danger" disabled={busy}
+                      onClick={() => remove(profile)}>Delete</button>
+                  </div>
+                </article>
+              ))}
       </div>
     </section>
   )

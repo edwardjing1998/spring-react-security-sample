@@ -36,6 +36,16 @@ public class UserController {
                 .toList();
     }
 
+    @GetMapping("/student-profile-users")
+    public List<UserResponse> studentProfileUsers() {
+        return users.findAll().stream()
+                .filter(user -> user.getRole() == Role.STUDENT)
+                .map(AuthService::toResponse)
+                .sorted((left, right) ->
+                        left.email().compareToIgnoreCase(right.email()))
+                .toList();
+    }
+
     @GetMapping("/health")
     public Map<String, String> health() { return Map.of("status", "UP"); }
 }
