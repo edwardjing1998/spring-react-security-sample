@@ -10,14 +10,16 @@ public interface SchoolMembershipRepository
 
     boolean existsBySchoolId(Long schoolId);
 
-    boolean existsByUserIdAndMembershipType(
+    boolean existsByUserIdAndMembershipTypeAndMembershipStatusIgnoreCase(
             Long userId,
-            MembershipType membershipType
+            MembershipType membershipType,
+            String membershipStatus
     );
 
     List<SchoolMembership>
-    findByMembershipTypeOrderByUserId(
-            MembershipType membershipType
+    findByMembershipTypeAndMembershipStatusIgnoreCaseOrderByUserId(
+            MembershipType membershipType,
+            String membershipStatus
     );
 
     boolean existsByUserIdAndSchoolIdAndMembershipTypeAndStartDate(
