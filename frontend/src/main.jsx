@@ -141,6 +141,7 @@ function Dashboard({ user, onLogout }) {
         {error && <div className="error">{error}</div>}
       </div>
       {user.role === 'ADMIN' && <ProfileAdmin />}
+      {user.role === 'ADMIN' && <SchoolAdmin />}
     </div>
   )
 }
@@ -294,13 +295,13 @@ function ProfileAdmin() {
         <Field label="Last name" type="text" value={form.lastName}
           onChange={value => change('lastName', value)} />
         <Field label="Display name" type="text" value={form.displayName}
-          onChange={value => change('displayName', value)} />
+          required={false} onChange={value => change('displayName', value)} />
         <Field label="Preferred language" type="text" value={form.preferredLanguage}
-          onChange={value => change('preferredLanguage', value)} />
+          required={false} onChange={value => change('preferredLanguage', value)} />
         <Field label="Timezone" type="text" value={form.timezone}
-          onChange={value => change('timezone', value)} />
+          required={false} onChange={value => change('timezone', value)} />
         <Field label="Avatar URL" type="url" value={form.avatarUrl}
-          onChange={value => change('avatarUrl', value)} />
+          required={false} onChange={value => change('avatarUrl', value)} />
         <button className="primary full-width" disabled={busy || (!editingUserId && !availableUsers.length)}>
           {busy ? 'Saving…' : editingUserId !== null ? 'Update profile' : 'Create profile'}
         </button>
@@ -324,6 +325,189 @@ function ProfileAdmin() {
               <div className="row-actions">
                 <button className="ghost" onClick={() => edit(profile)}>Edit</button>
                 <button className="danger" disabled={busy} onClick={() => remove(profile)}>Delete</button>
+              </div>
+            </article>
+          ))}
+      </div>
+    </section>
+  )
+}
+
+const emptySchool = {
+  schoolCode: '',
+  schoolName: '',
+  schoolType: '',
+  districtName: '',
+  addressLine1: '',
+  city: '',
+  stateCode: '',
+  postalCode: '',
+  countryCode: 'US',
+  status: 'ACTIVE',
+}
+
+function SchoolAdmin() {
+  const [schools, setSchools] = useState([])
+  const [form, setForm] = useState(emptySchool)
+  const [editingId, setEditingId] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+
+  async function load() {
+    setLoading(true)
+    setError('')
+    try {
+      setSchools(await api('/api/admin/schools'))
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { load() }, [])
+
+  function change(name, value) {
+    setForm(current => ({ ...current, [name]: value }))
+  }
+
+  function resetForm() {
+    setEditingId(null)
+    setForm(emptySchool)
+    setError('')
+  }
+
+  function edit(school) {
+    setEditingId(school.id)
+    setForm({
+      schoolCode: school.schoolCode,
+      schoolName: school.schoolName,
+      schoolType: school.schoolType || '',
+      districtName: school.districtName || '',
+      addressLine1: school.addressLine1 || '',
+      city: school.city || '',
+      stateCode: school.stateCode || '',
+      postalCode: school.postalCode || '',
+      countryCode: school.countryCode || 'US',
+      status: school.status || 'ACTIVE',
+    })
+    setError('')
+    setMessage('')
+  }
+
+  async function save(event) {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    setMessage('')
+    const payload = Object.fromEntries(
+      Object.entries(form).map(([key, value]) => [key, value || null])
+    )
+    try {
+      if (editingId !== null) {
+        await api(`/api/admin/schools/${editingId}`, {
+          method: 'PUT',
+          body: JSON.stringify(payload),
+        })
+        setMessage('School updated.')
+      } else {
+        await api('/api/admin/schools', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        })
+        setMessage('School created.')
+      }
+      resetForm()
+      await load()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function remove(school) {
+    if (!window.confirm(`Delete ${school.schoolName}?`)) return
+    setBusy(true)
+    setError('')
+    setMessage('')
+    try {
+      await api(`/api/admin/schools/${school.id}`, { method: 'DELETE' })
+      if (editingId === school.id) resetForm()
+      setMessage('School deleted.')
+      await load()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className="profile-admin school-admin">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">ADMIN ONLY</p>
+          <h3>School management</h3>
+          <p>Create, update, and delete school records.</p>
+        </div>
+        {editingId !== null && <button className="ghost" onClick={resetForm}>Cancel edit</button>}
+      </div>
+
+      <form className="profile-form school-form" onSubmit={save}>
+        <Field label="School code" type="text" value={form.schoolCode}
+          onChange={value => change('schoolCode', value)} />
+        <Field label="School name" type="text" value={form.schoolName}
+          onChange={value => change('schoolName', value)} />
+        <Field label="School type" type="text" value={form.schoolType}
+          required={false} onChange={value => change('schoolType', value)} />
+        <Field label="District" type="text" value={form.districtName}
+          required={false} onChange={value => change('districtName', value)} />
+        <label className="field full-width">
+          <span>Address</span>
+          <input type="text" value={form.addressLine1}
+            onChange={event => change('addressLine1', event.target.value)} />
+        </label>
+        <Field label="City" type="text" value={form.city}
+          required={false} onChange={value => change('city', value)} />
+        <Field label="State code" type="text" value={form.stateCode}
+          required={false} onChange={value => change('stateCode', value)} />
+        <Field label="Postal code" type="text" value={form.postalCode}
+          required={false} onChange={value => change('postalCode', value)} />
+        <Field label="Country code" type="text" value={form.countryCode}
+          onChange={value => change('countryCode', value)} />
+        <label className="field">
+          <span>Status</span>
+          <select value={form.status} onChange={event => change('status', event.target.value)}>
+            <option value="ACTIVE">Active</option>
+            <option value="INACTIVE">Inactive</option>
+          </select>
+        </label>
+        <button className="primary full-width" disabled={busy}>
+          {busy ? 'Saving…' : editingId !== null ? 'Update school' : 'Create school'}
+        </button>
+      </form>
+
+      {message && <div className="success profile-message">{message}</div>}
+      {error && <div className="error profile-message">{error}</div>}
+
+      <div className="profile-list">
+        <div className="list-heading"><h3>Schools</h3><button className="ghost" onClick={load}>Refresh</button></div>
+        {loading ? <div className="spinner small" aria-label="Loading schools" />
+          : schools.length === 0 ? <p className="empty-state">No schools have been created.</p>
+          : schools.map(school => (
+            <article className="profile-row school-row" key={school.id}>
+              <div className="school-mark">🏫</div>
+              <div className="profile-summary">
+                <strong>{school.schoolName}</strong>
+                <span>{school.schoolCode} · {school.schoolType || 'Type not set'}</span>
+                <small>{[school.districtName, school.city, school.stateCode].filter(Boolean).join(' · ') || 'Location not set'} · {school.status}</small>
+              </div>
+              <div className="row-actions">
+                <button className="ghost" onClick={() => edit(school)}>Edit</button>
+                <button className="danger" disabled={busy} onClick={() => remove(school)}>Delete</button>
               </div>
             </article>
           ))}

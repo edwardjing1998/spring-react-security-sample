@@ -54,6 +54,7 @@ form { display: grid; gap: 17px; margin-top: 28px; }
 .admin-box p { color: #728096; font-size: 14px; }
 .admin-box .error, .admin-box .success { margin-top: 14px; }
 .profile-admin { border-top: 1px solid #e2e7ed; margin-top: 28px; padding-top: 28px; }
+.school-admin { margin-top: 38px; }
 .section-heading, .list-heading { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; }
 .section-heading h3, .list-heading h3 { margin-bottom: 5px; }
 .section-heading p:not(.eyebrow) { color: #728096; font-size: 14px; margin: 0; }
@@ -65,6 +66,7 @@ form { display: grid; gap: 17px; margin-top: 28px; }
 .list-heading h3 { margin: 0; }
 .profile-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 16px 0; border-bottom: 1px solid #e8edf2; }
 .mini-avatar { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; color: white; background: #317ed9; font-weight: 700; }
+.school-mark { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; background: #e8f2ff; font-size: 20px; }
 .profile-summary { min-width: 0; display: grid; gap: 3px; }
 .profile-summary span, .profile-summary small { color: #728096; overflow-wrap: anywhere; }
 .row-actions { display: flex; gap: 8px; }
