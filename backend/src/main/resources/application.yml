@@ -21,14 +21,15 @@ spring:
 
 server:
   # Use SERVER_PORT instead of the generic PORT variable.
-  # OpenShift deployment explicitly sets SERVER_PORT=8080.
+  # OpenShift explicitly sets SERVER_PORT=8080.
   port: ${SERVER_PORT:8080}
 
 app:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+
   jwt:
-    # Development-only default value.
-    # OpenShift overrides this with the JWT_SECRET secret.
+    # Development-only default.
+    # OpenShift should override it with JWT_SECRET.
     secret: ${JWT_SECRET:c3ByaW5nLXJlYWN0LXNlY3VyaXR5LWRldi1rZXktMzItYnl0ZXMhIQ==}
     expiration-seconds: ${JWT_EXPIRATION_SECONDS:900}
