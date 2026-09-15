@@ -145,6 +145,8 @@ function Dashboard({ user, onLogout }) {
       {user.role === 'ADMIN' && <MembershipAdmin />}
       {['ADMIN', 'STUDENT', 'STAFF', 'GUARDIAN', 'TEACHER'].includes(user.role) &&
         <StudentProfileManager />}
+      {['ADMIN', 'STAFF', 'TEACHER'].includes(user.role) &&
+        <TeacherProfileManager />}
     </div>
   )
 }
@@ -948,6 +950,218 @@ function StudentProfileManager() {
                         ? ` · Graduation ${profile.expectedGraduationYear}`
                         : ''}
                     </small>
+                  </div>
+                  <div className="row-actions">
+                    <button className="ghost" onClick={() => edit(profile)}>Edit</button>
+                    <button className="danger" disabled={busy}
+                      onClick={() => remove(profile)}>Delete</button>
+                  </div>
+                </article>
+              ))}
+      </div>
+    </section>
+  )
+}
+
+const emptyTeacherProfile = {
+  userId: '',
+  employeeNumber: '',
+  jobTitle: '',
+  departmentName: '',
+  biography: '',
+}
+
+function TeacherProfileManager() {
+  const [profiles, setProfiles] = useState([])
+  const [teachers, setTeachers] = useState([])
+  const [form, setForm] = useState(emptyTeacherProfile)
+  const [editingUserId, setEditingUserId] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+
+  async function load() {
+    setLoading(true)
+    setError('')
+    try {
+      const [profileRows, teacherRows] = await Promise.all([
+        api('/api/teacher-profiles'),
+        api('/api/teacher-profile-users'),
+      ])
+      setProfiles(profileRows)
+      setTeachers(teacherRows)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { load() }, [])
+
+  function change(name, value) {
+    setForm(current => ({ ...current, [name]: value }))
+  }
+
+  function resetForm() {
+    setEditingUserId(null)
+    setForm(emptyTeacherProfile)
+    setError('')
+  }
+
+  function edit(profile) {
+    setEditingUserId(profile.userId)
+    setForm({
+      userId: String(profile.userId),
+      employeeNumber: profile.employeeNumber || '',
+      jobTitle: profile.jobTitle || '',
+      departmentName: profile.departmentName || '',
+      biography: profile.biography || '',
+    })
+    setError('')
+    setMessage('')
+  }
+
+  async function save(event) {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    setMessage('')
+
+    const details = {
+      employeeNumber: form.employeeNumber || null,
+      jobTitle: form.jobTitle || null,
+      departmentName: form.departmentName || null,
+      biography: form.biography || null,
+    }
+
+    try {
+      if (editingUserId !== null) {
+        await api(`/api/teacher-profiles/${editingUserId}`, {
+          method: 'PUT',
+          body: JSON.stringify(details),
+        })
+        setMessage('Teacher profile updated.')
+      } else {
+        await api('/api/teacher-profiles', {
+          method: 'POST',
+          body: JSON.stringify({ ...details, userId: Number(form.userId) }),
+        })
+        setMessage('Teacher profile created.')
+      }
+
+      resetForm()
+      await load()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function remove(profile) {
+    if (!window.confirm(`Delete the teacher profile for ${profile.userName}?`)) return
+
+    setBusy(true)
+    setError('')
+    setMessage('')
+    try {
+      await api(`/api/teacher-profiles/${profile.userId}`, {
+        method: 'DELETE',
+      })
+      if (editingUserId === profile.userId) resetForm()
+      setMessage('Teacher profile deleted.')
+      await load()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const profiledUserIds = new Set(profiles.map(profile => profile.userId))
+  const availableTeachers = teachers.filter(
+    teacher => !profiledUserIds.has(teacher.id)
+  )
+
+  return (
+    <section className="profile-admin teacher-profile-admin">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">ADMIN · STAFF · TEACHER</p>
+          <h3>Teacher profile management</h3>
+          <p>Create, update, and delete teacher employment profiles.</p>
+        </div>
+        {editingUserId !== null &&
+          <button className="ghost" onClick={resetForm}>Cancel edit</button>}
+      </div>
+
+      <form className="profile-form teacher-profile-form" onSubmit={save}>
+        <label className="field full-width">
+          <span>Teacher account</span>
+          <select required disabled={editingUserId !== null}
+            value={form.userId}
+            onChange={event => change('userId', event.target.value)}>
+            <option value="">Select a teacher</option>
+            {editingUserId !== null
+              ? teachers.filter(teacher => teacher.id === editingUserId)
+                  .map(teacher =>
+                    <option key={teacher.id} value={teacher.id}>
+                      {teacher.name} — {teacher.email}
+                    </option>)
+              : availableTeachers.map(teacher =>
+                  <option key={teacher.id} value={teacher.id}>
+                    {teacher.name} — {teacher.email}
+                  </option>)}
+          </select>
+        </label>
+        <Field label="Employee number" type="text"
+          value={form.employeeNumber} required={false}
+          onChange={value => change('employeeNumber', value)} />
+        <Field label="Job title" type="text"
+          value={form.jobTitle} required={false}
+          onChange={value => change('jobTitle', value)} />
+        <Field label="Department" type="text"
+          value={form.departmentName} required={false}
+          onChange={value => change('departmentName', value)} />
+        <label className="field full-width">
+          <span>Biography</span>
+          <textarea value={form.biography}
+            onChange={event => change('biography', event.target.value)} />
+        </label>
+        <button className="primary full-width"
+          disabled={busy || (editingUserId === null && !availableTeachers.length)}>
+          {busy ? 'Saving…'
+            : editingUserId !== null
+              ? 'Update teacher profile'
+              : 'Create teacher profile'}
+        </button>
+      </form>
+
+      {message && <div className="success profile-message">{message}</div>}
+      {error && <div className="error profile-message">{error}</div>}
+
+      <div className="profile-list">
+        <div className="list-heading">
+          <h3>Teacher profiles</h3>
+          <button className="ghost" onClick={load}>Refresh</button>
+        </div>
+        {loading
+          ? <div className="spinner small" aria-label="Loading teacher profiles" />
+          : profiles.length === 0
+            ? <p className="empty-state">No teacher profiles have been created.</p>
+            : profiles.map(profile => (
+                <article className="profile-row teacher-profile-row" key={profile.userId}>
+                  <div className="teacher-mark">
+                    {profile.userName.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="profile-summary">
+                    <strong>{profile.userName}</strong>
+                    <span>{profile.jobTitle || 'Job title not set'}
+                      {profile.departmentName ? ` · ${profile.departmentName}` : ''}</span>
+                    <small>{profile.userEmail}
+                      {profile.employeeNumber ? ` · ${profile.employeeNumber}` : ''}</small>
                   </div>
                   <div className="row-actions">
                     <button className="ghost" onClick={() => edit(profile)}>Edit</button>

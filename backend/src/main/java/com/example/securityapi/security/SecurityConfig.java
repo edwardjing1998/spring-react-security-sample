@@ -103,6 +103,18 @@ public class SecurityConfig {
                                 "GUARDIAN",
                                 "TEACHER"
                         )
+                        .requestMatchers("/api/teacher-profiles/**")
+                        .hasAnyRole(
+                                "ADMIN",
+                                "STAFF",
+                                "TEACHER"
+                        )
+                        .requestMatchers("/api/teacher-profile-users")
+                        .hasAnyRole(
+                                "ADMIN",
+                                "STAFF",
+                                "TEACHER"
+                        )
                         .requestMatchers("/api/admin/**")
                         .hasRole("ADMIN")
                         .anyRequest()
