@@ -140,9 +140,196 @@ function Dashboard({ user, onLogout }) {
         {adminResult && <div className="success">{adminResult.message} Registered users: {adminResult.registeredUsers}.</div>}
         {error && <div className="error">{error}</div>}
       </div>
+      {user.role === 'ADMIN' && <ProfileAdmin />}
     </div>
   )
 }
 
-createRoot(document.getElementById('root')).render(<React.StrictMode><App /></React.StrictMode>)
+const emptyProfile = {
+  userId: '',
+  firstName: '',
+  lastName: '',
+  displayName: '',
+  preferredLanguage: 'en-US',
+  timezone: 'America/Los_Angeles',
+  avatarUrl: '',
+}
 
+function ProfileAdmin() {
+  const [profiles, setProfiles] = useState([])
+  const [users, setUsers] = useState([])
+  const [form, setForm] = useState(emptyProfile)
+  const [editingUserId, setEditingUserId] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+
+  async function load() {
+    setLoading(true)
+    setError('')
+    try {
+      const [profileRows, userRows] = await Promise.all([
+        api('/api/admin/user-profiles'),
+        api('/api/admin/users'),
+      ])
+      setProfiles(profileRows)
+      setUsers(userRows)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { load() }, [])
+
+  function change(name, value) {
+    setForm(current => ({ ...current, [name]: value }))
+  }
+
+  function resetForm() {
+    setEditingUserId(null)
+    setForm(emptyProfile)
+    setError('')
+  }
+
+  function edit(profile) {
+    setEditingUserId(profile.userId)
+    setForm({
+      userId: String(profile.userId),
+      firstName: profile.firstName,
+      lastName: profile.lastName,
+      displayName: profile.displayName || '',
+      preferredLanguage: profile.preferredLanguage || 'en-US',
+      timezone: profile.timezone || 'America/Los_Angeles',
+      avatarUrl: profile.avatarUrl || '',
+    })
+    setMessage('')
+    setError('')
+  }
+
+  async function save(event) {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    setMessage('')
+    const details = {
+      firstName: form.firstName,
+      lastName: form.lastName,
+      displayName: form.displayName || null,
+      preferredLanguage: form.preferredLanguage || null,
+      timezone: form.timezone || null,
+      avatarUrl: form.avatarUrl || null,
+    }
+    try {
+      if (editingUserId !== null) {
+        await api(`/api/admin/user-profiles/${editingUserId}`, {
+          method: 'PUT',
+          body: JSON.stringify(details),
+        })
+        setMessage('User profile updated.')
+      } else {
+        await api('/api/admin/user-profiles', {
+          method: 'POST',
+          body: JSON.stringify({ ...details, userId: Number(form.userId) }),
+        })
+        setMessage('User profile created.')
+      }
+      resetForm()
+      await load()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function remove(profile) {
+    if (!window.confirm(`Delete the profile for ${profile.userEmail}?`)) return
+    setBusy(true)
+    setError('')
+    setMessage('')
+    try {
+      await api(`/api/admin/user-profiles/${profile.userId}`, { method: 'DELETE' })
+      if (editingUserId === profile.userId) resetForm()
+      setMessage('User profile deleted.')
+      await load()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const profiledIds = new Set(profiles.map(profile => profile.userId))
+  const availableUsers = users.filter(user => !profiledIds.has(user.id))
+
+  return (
+    <section className="profile-admin">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">ADMIN ONLY</p>
+          <h3>User profile management</h3>
+          <p>Create, update, and delete extended user profiles.</p>
+        </div>
+        {editingUserId !== null && <button className="ghost" onClick={resetForm}>Cancel edit</button>}
+      </div>
+
+      <form className="profile-form" onSubmit={save}>
+        <label className="field full-width">
+          <span>User account</span>
+          <select required disabled={editingUserId !== null} value={form.userId}
+            onChange={event => change('userId', event.target.value)}>
+            <option value="">Select a user</option>
+            {editingUserId !== null
+              ? users.filter(user => user.id === editingUserId).map(user =>
+                  <option key={user.id} value={user.id}>{user.name} — {user.email}</option>)
+              : availableUsers.map(user =>
+                  <option key={user.id} value={user.id}>{user.name} — {user.email}</option>)}
+          </select>
+        </label>
+        <Field label="First name" type="text" value={form.firstName}
+          onChange={value => change('firstName', value)} />
+        <Field label="Last name" type="text" value={form.lastName}
+          onChange={value => change('lastName', value)} />
+        <Field label="Display name" type="text" value={form.displayName}
+          onChange={value => change('displayName', value)} />
+        <Field label="Preferred language" type="text" value={form.preferredLanguage}
+          onChange={value => change('preferredLanguage', value)} />
+        <Field label="Timezone" type="text" value={form.timezone}
+          onChange={value => change('timezone', value)} />
+        <Field label="Avatar URL" type="url" value={form.avatarUrl}
+          onChange={value => change('avatarUrl', value)} />
+        <button className="primary full-width" disabled={busy || (!editingUserId && !availableUsers.length)}>
+          {busy ? 'Saving…' : editingUserId !== null ? 'Update profile' : 'Create profile'}
+        </button>
+      </form>
+
+      {message && <div className="success profile-message">{message}</div>}
+      {error && <div className="error profile-message">{error}</div>}
+
+      <div className="profile-list">
+        <div className="list-heading"><h3>Existing profiles</h3><button className="ghost" onClick={load}>Refresh</button></div>
+        {loading ? <div className="spinner small" aria-label="Loading profiles" />
+          : profiles.length === 0 ? <p className="empty-state">No user profiles have been created.</p>
+          : profiles.map(profile => (
+            <article className="profile-row" key={profile.userId}>
+              <div className="mini-avatar">{(profile.displayName || profile.firstName).charAt(0).toUpperCase()}</div>
+              <div className="profile-summary">
+                <strong>{profile.displayName || `${profile.firstName} ${profile.lastName}`}</strong>
+                <span>{profile.userEmail}</span>
+                <small>{profile.preferredLanguage} · {profile.timezone}</small>
+              </div>
+              <div className="row-actions">
+                <button className="ghost" onClick={() => edit(profile)}>Edit</button>
+                <button className="danger" disabled={busy} onClick={() => remove(profile)}>Delete</button>
+              </div>
+            </article>
+          ))}
+      </div>
+    </section>
+  )
+}
+
+createRoot(document.getElementById('root')).render(<React.StrictMode><App /></React.StrictMode>)
