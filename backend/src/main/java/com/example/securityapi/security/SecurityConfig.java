@@ -97,7 +97,13 @@ public class SecurityConfig {
 
     @Bean
     CorsConfigurationSource corsConfigurationSource(
-            @Value("${app.cors.allowed-origins:http://localhost:5173}")
+            @Value(
+                    "${app.cors.allowed-origins:"
+                            + "http://localhost:5173,"
+                            + "https://security-ui-chat8gpt20180625-dev.apps.rm1.0a51.p1.openshiftapps.com,"
+                            + "https://azure-upload-react-ui-chat8gpt20180625-dev.apps.rm1.0a51.p1.openshiftapps.com"
+                            + "}"
+            )
             List<String> origins) {
 
         CorsConfiguration config = new CorsConfiguration();
