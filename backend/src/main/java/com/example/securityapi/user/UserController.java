@@ -37,10 +37,13 @@ public class UserController {
             Authentication authentication
     ) {
         AppUser user = users
-                .findByEmailIgnoreCase(authentication.getName())
+                .findByEmailIgnoreCase(
+                        authentication.getName()
+                )
                 .orElseThrow(() ->
                         new ResponseStatusException(
-                                HttpStatus.NOT_FOUND
+                                HttpStatus.NOT_FOUND,
+                                "User not found"
                         )
                 );
 
@@ -74,8 +77,9 @@ public class UserController {
     public List<UserResponse> studentProfileUsers() {
         Set<Long> studentUserIds =
                 memberships
-                        .findByMembershipTypeOrderByUserId(
-                                MembershipType.STUDENT
+                        .findByMembershipTypeAndMembershipStatusIgnoreCaseOrderByUserId(
+                                MembershipType.STUDENT,
+                                "ACTIVE"
                         )
                         .stream()
                         .map(membership ->
@@ -96,6 +100,9 @@ public class UserController {
 
     @GetMapping("/health")
     public Map<String, String> health() {
-        return Map.of("status", "UP");
+        return Map.of(
+                "status",
+                "UP"
+        );
     }
 }
