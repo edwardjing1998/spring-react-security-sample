@@ -142,6 +142,7 @@ function Dashboard({ user, onLogout }) {
       </div>
       {user.role === 'ADMIN' && <ProfileAdmin />}
       {user.role === 'ADMIN' && <SchoolAdmin />}
+      {user.role === 'ADMIN' && <MembershipAdmin />}
     </div>
   )
 }
@@ -508,6 +509,213 @@ function SchoolAdmin() {
               <div className="row-actions">
                 <button className="ghost" onClick={() => edit(school)}>Edit</button>
                 <button className="danger" disabled={busy} onClick={() => remove(school)}>Delete</button>
+              </div>
+            </article>
+          ))}
+      </div>
+    </section>
+  )
+}
+
+const emptyMembership = {
+  userId: '',
+  schoolId: '',
+  membershipType: 'STUDENT',
+  externalPersonId: '',
+  membershipStatus: 'ACTIVE',
+  startDate: '',
+  endDate: '',
+}
+
+function MembershipAdmin() {
+  const [memberships, setMemberships] = useState([])
+  const [users, setUsers] = useState([])
+  const [schools, setSchools] = useState([])
+  const [form, setForm] = useState(emptyMembership)
+  const [editingId, setEditingId] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+
+  async function load() {
+    setLoading(true)
+    setError('')
+    try {
+      const [membershipRows, userRows, schoolRows] = await Promise.all([
+        api('/api/admin/school-memberships'),
+        api('/api/admin/users'),
+        api('/api/admin/schools'),
+      ])
+      setMemberships(membershipRows)
+      setUsers(userRows)
+      setSchools(schoolRows)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { load() }, [])
+
+  function change(name, value) {
+    setForm(current => ({ ...current, [name]: value }))
+  }
+
+  function resetForm() {
+    setEditingId(null)
+    setForm(emptyMembership)
+    setError('')
+  }
+
+  function edit(membership) {
+    setEditingId(membership.id)
+    setForm({
+      userId: String(membership.userId),
+      schoolId: String(membership.schoolId),
+      membershipType: membership.membershipType,
+      externalPersonId: membership.externalPersonId || '',
+      membershipStatus: membership.membershipStatus || 'ACTIVE',
+      startDate: membership.startDate || '',
+      endDate: membership.endDate || '',
+    })
+    setError('')
+    setMessage('')
+  }
+
+  async function save(event) {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    setMessage('')
+    const payload = {
+      userId: Number(form.userId),
+      schoolId: Number(form.schoolId),
+      membershipType: form.membershipType,
+      externalPersonId: form.externalPersonId || null,
+      membershipStatus: form.membershipStatus || null,
+      startDate: form.startDate || null,
+      endDate: form.endDate || null,
+    }
+    try {
+      if (editingId !== null) {
+        await api(`/api/admin/school-memberships/${editingId}`, {
+          method: 'PUT',
+          body: JSON.stringify(payload),
+        })
+        setMessage('School membership updated.')
+      } else {
+        await api('/api/admin/school-memberships', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        })
+        setMessage('School member added.')
+      }
+      resetForm()
+      await load()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function remove(membership) {
+    if (!window.confirm(`Remove ${membership.userName} from ${membership.schoolName}?`)) return
+    setBusy(true)
+    setError('')
+    setMessage('')
+    try {
+      await api(`/api/admin/school-memberships/${membership.id}`, { method: 'DELETE' })
+      if (editingId === membership.id) resetForm()
+      setMessage('School member removed.')
+      await load()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const formUnavailable = users.length === 0 || schools.length === 0
+
+  return (
+    <section className="profile-admin membership-admin">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">ADMIN ONLY</p>
+          <h3>School membership management</h3>
+          <p>Add users to schools and manage their membership details.</p>
+        </div>
+        {editingId !== null && <button className="ghost" onClick={resetForm}>Cancel edit</button>}
+      </div>
+
+      {formUnavailable && !loading &&
+        <div className="error profile-message">Create at least one user and one school before adding a membership.</div>}
+
+      <form className="profile-form membership-form" onSubmit={save}>
+        <label className="field">
+          <span>User</span>
+          <select required value={form.userId} onChange={event => change('userId', event.target.value)}>
+            <option value="">Select a user</option>
+            {users.map(user => <option key={user.id} value={user.id}>{user.name} — {user.email}</option>)}
+          </select>
+        </label>
+        <label className="field">
+          <span>School</span>
+          <select required value={form.schoolId} onChange={event => change('schoolId', event.target.value)}>
+            <option value="">Select a school</option>
+            {schools.map(school => <option key={school.id} value={school.id}>{school.schoolName} — {school.schoolCode}</option>)}
+          </select>
+        </label>
+        <label className="field">
+          <span>Membership type</span>
+          <select required value={form.membershipType} onChange={event => change('membershipType', event.target.value)}>
+            <option value="STUDENT">Student</option>
+            <option value="TEACHER">Teacher</option>
+            <option value="ADMINISTRATOR">Administrator</option>
+            <option value="STAFF">Staff</option>
+            <option value="GUARDIAN">Guardian</option>
+          </select>
+        </label>
+        <Field label="External person ID" type="text" value={form.externalPersonId}
+          required={false} onChange={value => change('externalPersonId', value)} />
+        <label className="field">
+          <span>Membership status</span>
+          <select value={form.membershipStatus} onChange={event => change('membershipStatus', event.target.value)}>
+            <option value="ACTIVE">Active</option>
+            <option value="INACTIVE">Inactive</option>
+            <option value="SUSPENDED">Suspended</option>
+          </select>
+        </label>
+        <Field label="Start date" type="date" value={form.startDate}
+          required={false} onChange={value => change('startDate', value)} />
+        <Field label="End date" type="date" value={form.endDate}
+          required={false} onChange={value => change('endDate', value)} />
+        <button className="primary full-width" disabled={busy || formUnavailable}>
+          {busy ? 'Saving…' : editingId !== null ? 'Update membership' : 'Add school member'}
+        </button>
+      </form>
+
+      {message && <div className="success profile-message">{message}</div>}
+      {error && <div className="error profile-message">{error}</div>}
+
+      <div className="profile-list">
+        <div className="list-heading"><h3>School members</h3><button className="ghost" onClick={load}>Refresh</button></div>
+        {loading ? <div className="spinner small" aria-label="Loading memberships" />
+          : memberships.length === 0 ? <p className="empty-state">No school memberships have been created.</p>
+          : memberships.map(membership => (
+            <article className="profile-row membership-row" key={membership.id}>
+              <div className="member-mark">{membership.userName.charAt(0).toUpperCase()}</div>
+              <div className="profile-summary">
+                <strong>{membership.userName}</strong>
+                <span>{membership.membershipType} at {membership.schoolName}</span>
+                <small>{membership.userEmail} · {membership.membershipStatus}{membership.startDate ? ` · From ${membership.startDate}` : ''}</small>
+              </div>
+              <div className="row-actions">
+                <button className="ghost" onClick={() => edit(membership)}>Edit</button>
+                <button className="danger" disabled={busy} onClick={() => remove(membership)}>Remove</button>
               </div>
             </article>
           ))}
