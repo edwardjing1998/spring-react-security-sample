@@ -1,7 +1,9 @@
 package com.example.securityapi.security;
 
 import com.example.securityapi.user.UserRepository;
+
 import java.util.List;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -27,15 +29,23 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class SecurityConfig {
 
     @Bean
-    UserDetailsService userDetailsService(UserRepository users) {
-        return username -> users.findByEmailIgnoreCase(username)
-                .map(user -> User.withUsername(user.getEmail())
-                        .password(user.getPasswordHash())
-                        .roles(user.getRole().name())
-                        .build())
-                .orElseThrow(() ->
-                        new org.springframework.security.core.userdetails
-                                .UsernameNotFoundException("User not found"));
+    UserDetailsService userDetailsService(
+            UserRepository users
+    ) {
+        return username ->
+                users.findByEmailIgnoreCase(username)
+                        .map(user ->
+                                User.withUsername(user.getEmail())
+                                        .password(user.getPasswordHash())
+                                        .roles(user.getRole().name())
+                                        .build()
+                        )
+                        .orElseThrow(() ->
+                                new org.springframework.security.core.userdetails
+                                        .UsernameNotFoundException(
+                                        "User not found"
+                                )
+                        );
     }
 
     @Bean
@@ -46,80 +56,116 @@ public class SecurityConfig {
     @Bean
     DaoAuthenticationProvider authenticationProvider(
             UserDetailsService userDetailsService,
-            PasswordEncoder passwordEncoder) {
+            PasswordEncoder passwordEncoder
+    ) {
+        DaoAuthenticationProvider provider =
+                new DaoAuthenticationProvider(
+                        userDetailsService
+                );
 
-        var provider =
-                new DaoAuthenticationProvider(userDetailsService);
         provider.setPasswordEncoder(passwordEncoder);
+
         return provider;
     }
 
     @Bean
     AuthenticationManager authenticationManager(
-            AuthenticationConfiguration configuration) throws Exception {
-
-        return configuration.getAuthenticationManager();
+            AuthenticationConfiguration configuration
+    ) throws Exception {
+        return configuration
+                .getAuthenticationManager();
     }
 
     @Bean
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             JwtAuthenticationFilter jwtFilter,
-            CorsConfigurationSource corsConfigurationSource)
-            throws Exception {
-
+            CorsConfigurationSource corsConfigurationSource
+    ) throws Exception {
         return http
                 .csrf(csrf -> csrf.disable())
                 .cors(cors ->
-                        cors.configurationSource(corsConfigurationSource))
+                        cors.configurationSource(
+                                corsConfigurationSource
+                        )
+                )
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(
-                                SessionCreationPolicy.STATELESS))
+                                SessionCreationPolicy.STATELESS
+                        )
+                )
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.OPTIONS, "/**")
-                        .permitAll()
+                        .requestMatchers(
+                                HttpMethod.OPTIONS,
+                                "/**"
+                        ).permitAll()
+
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/auth/signup",
                                 "/api/auth/login"
                         ).permitAll()
+
                         .requestMatchers(
                                 "/api/health",
+                                "/actuator/health",
+                                "/actuator/health/**",
                                 "/error"
                         ).permitAll()
-                        .requestMatchers("/api/admin/**")
-                        .hasRole("ADMIN")
+
+                        .requestMatchers(
+                                "/api/admin/**"
+                        ).hasRole("ADMIN")
+
                         .anyRequest()
-                        .authenticated())
+                        .authenticated()
+                )
                 .addFilterBefore(
                         jwtFilter,
-                        UsernamePasswordAuthenticationFilter.class)
+                        UsernamePasswordAuthenticationFilter.class
+                )
                 .build();
     }
 
     @Bean
     CorsConfigurationSource corsConfigurationSource(
-            @Value(
-                    "${app.cors.allowed-origins:"
-                            + "http://localhost:5173,"
-                            + "https://security-ui-chat8gpt20180625-dev.apps.rm1.0a51.p1.openshiftapps.com,"
-                            + "https://azure-upload-react-ui-chat8gpt20180625-dev.apps.rm1.0a51.p1.openshiftapps.com"
-                            + "}"
-            )
-            List<String> origins) {
+            @Value("${app.cors.allowed-origins}")
+            List<String> origins
+    ) {
+        CorsConfiguration config =
+                new CorsConfiguration();
 
-        CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOrigins(origins);
+
         config.setAllowedMethods(
-                List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
+                List.of(
+                        "GET",
+                        "POST",
+                        "PUT",
+                        "PATCH",
+                        "DELETE",
+                        "OPTIONS"
+                )
         );
+
         config.setAllowedHeaders(
-                List.of("Authorization", "Content-Type")
+                List.of(
+                        "Authorization",
+                        "Content-Type",
+                        "Accept"
+                )
         );
+
         config.setAllowCredentials(false);
 
-        var source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/api/**", config);
+        UrlBasedCorsConfigurationSource source =
+                new UrlBasedCorsConfigurationSource();
+
+        source.registerCorsConfiguration(
+                "/api/**",
+                config
+        );
+
         return source;
     }
 }
