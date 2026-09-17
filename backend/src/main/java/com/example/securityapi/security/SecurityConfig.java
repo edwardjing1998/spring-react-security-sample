@@ -129,7 +129,7 @@ public class SecurityConfig {
     CorsConfigurationSource corsConfigurationSource(
             @Value(
                     "${app.cors.allowed-origins:"
-                            + "http://localhost:5173,"
+                            + "https://github-databricks-trigger-ui-edward-jing-dev.apps.rm1.0a51.p1.openshiftapps.com,"
                             + "https://security-ui-chat8gpt20180625-dev.apps.rm1.0a51.p1.openshiftapps.com,"
                             + "https://azure-upload-react-ui-chat8gpt20180625-dev.apps.rm1.0a51.p1.openshiftapps.com"
                             + "}"
