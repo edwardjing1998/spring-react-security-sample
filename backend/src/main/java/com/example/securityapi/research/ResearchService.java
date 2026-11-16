@@ -4,6 +4,7 @@ import com.example.securityapi.research.ResearchDtos.*;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -122,6 +123,58 @@ public class ResearchService {
         result.put("relations", jdbc.query("SELECT * FROM research_record_relations " +
                 "WHERE source_record_id=? OR target_record_id=? ORDER BY id", mapRow, id, id));
         return result;
+    }
+
+    /** Deep-merge JSON objects; scalar/array values in the patch replace existing values. */
+    private void mergeObject(ObjectNode target, JsonNode patch) {
+        patch.fields().forEachRemaining(entry -> {
+            String key = entry.getKey();
+            JsonNode incoming = entry.getValue();
+            JsonNode existing = target.get(key);
+            if (incoming.isObject() && existing != null && existing.isObject()) {
+                mergeObject((ObjectNode) existing, incoming);
+            } else {
+                target.set(key, incoming.deepCopy());
+            }
+        });
+    }
+
+    /** Update an existing IT project without overwriting unrelated project attributes. */
+    @Transactional
+    public Map<String, Object> updateRecordDetails(long id, RecordDetailsPatch patch) {
+        if (patch == null || patch.attributes() == null || !patch.attributes().isObject()
+                || patch.attributes().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "attributes must be a non-empty JSON object");
+        }
+        if (patch.attributes().toString().length() > 131_072) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "attributes payload is too large");
+        }
+        if (patch.evidenceSummary() != null && patch.evidenceSummary().length() > 10_000) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "evidenceSummary is too large");
+        }
+
+        // FOR UPDATE serializes concurrent patches to the same record.
+        var rows = jdbc.query("SELECT id,record_type,attributes FROM research_records WHERE id=? FOR UPDATE",
+                mapRow, id);
+        if (rows.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Research record not found");
+        }
+        Map<String, Object> current = rows.get(0);
+        if (!"it_project".equals(current.get("record_type"))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Deep research updates are supported only for it_project records");
+        }
+        ObjectNode attributes = mapper.createObjectNode();
+        Object previous = current.get("attributes");
+        if (previous instanceof JsonNode existing && existing.isObject()) {
+            attributes = (ObjectNode) existing.deepCopy();
+        }
+        mergeObject(attributes, patch.attributes());
+        jdbc.update("UPDATE research_records SET attributes=CAST(? AS jsonb), " +
+                        "evidence_summary=COALESCE(?,evidence_summary), updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                attributes.toString(), patch.evidenceSummary(), id);
+        return record(id);
     }
 
     private Long existingReportByResponseId(String responseId) {

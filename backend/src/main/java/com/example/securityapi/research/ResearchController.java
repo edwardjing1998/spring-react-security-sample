@@ -74,6 +74,13 @@ public class ResearchController {
     @GetMapping("/records/{id}")
     public Map<String, Object> record(@PathVariable long id) { return service.record(id); }
 
+    /** Merge new technical research details into an existing IT project. */
+    @PatchMapping("/records/{id}")
+    public Map<String, Object> patchRecord(@PathVariable long id,
+                                           @Valid @RequestBody RecordDetailsPatch body) {
+        return service.updateRecordDetails(id, body);
+    }
+
     @PostMapping("/records/{id}/tags")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void tag(@PathVariable long id, @Valid @RequestBody TagInput body) {

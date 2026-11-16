@@ -30,6 +30,9 @@ public final class ResearchDtos {
             List<@Valid TagInput> tags,
             List<String> sourceUrls) {}
 
+    /** PATCH merges attributes recursively; evidenceSummary is optional. */
+    public record RecordDetailsPatch(@NotNull JsonNode attributes, String evidenceSummary) {}
+
     /** Use zero-based record positions in the import's records list. */
     public record RelationInput(@NotNull Integer fromIndex, @NotNull Integer toIndex,
                                 @NotBlank String relationshipType, String description) {}
