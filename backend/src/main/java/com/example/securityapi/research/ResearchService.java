@@ -104,12 +104,33 @@ public class ResearchService {
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> searchRecords(String type, String category, String evidence, String tag, int limit, int offset) {
-        String sql = "SELECT r.* FROM research_records r WHERE (? IS NULL OR r.record_type=?) " +
-                "AND (? IS NULL OR r.category=?) AND (? IS NULL OR r.evidence_type=?) " +
-                "AND (? IS NULL OR EXISTS (SELECT 1 FROM research_record_tags t " +
-                "WHERE t.record_id=r.id AND lower(t.tag_value)=lower(?))) " +
-                "ORDER BY r.id DESC LIMIT ? OFFSET ?";
-        return jdbc.query(sql, mapRow, type, type, category, category, evidence, evidence, tag, tag, limit, offset);
+        // Include optional predicates only when values are provided. PostgreSQL cannot
+        // infer the SQL type of an untyped null in the expression "? IS NULL".
+        StringBuilder sql = new StringBuilder("SELECT r.* FROM research_records r WHERE 1=1");
+        List<Object> params = new ArrayList<>();
+
+        if (type != null && !type.isBlank()) {
+            sql.append(" AND r.record_type=?");
+            params.add(type);
+        }
+        if (category != null && !category.isBlank()) {
+            sql.append(" AND r.category=?");
+            params.add(category);
+        }
+        if (evidence != null && !evidence.isBlank()) {
+            sql.append(" AND r.evidence_type=?");
+            params.add(evidence);
+        }
+        if (tag != null && !tag.isBlank()) {
+            sql.append(" AND EXISTS (SELECT 1 FROM research_record_tags t ")
+                    .append("WHERE t.record_id=r.id AND lower(t.tag_value)=lower(?))");
+            params.add(tag);
+        }
+
+        sql.append(" ORDER BY r.id DESC LIMIT ? OFFSET ?");
+        params.add(limit);
+        params.add(offset);
+        return jdbc.query(sql.toString(), mapRow, params.toArray());
     }
 
     @Transactional(readOnly = true)
